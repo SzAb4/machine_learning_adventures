@@ -11,19 +11,6 @@ from main import GridWorld
 OBSTACLES = [3,24,35,55,56,57,58, 59, 82, 92]
 DISCOUNT_FACTOR = 0.95
 
-class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim):
-        super(Actor, self).__init__()
-        self.fc1 = nn.Linear(state_dim, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, action_dim)
-        self.softmax = nn.Softmax(dim=-1)
-
-    def forward(self, state):
-        x = torch.relu(self.fc1(state))
-        x = torch.relu(self.fc2(x))
-        x = self.softmax(self.fc3(x))
-        return x
 
 class Critic(nn.Module):
     def __init__(self, state_dim):
@@ -40,15 +27,13 @@ class Critic(nn.Module):
 
 def train(render=False):
     epsilon = 1
-    epsilon_decay = 0.99995
+    epsilon_decay = 0.998
     min_epsilon = 0.05
     env = GridWorld(10, OBSTACLES)
-    actor = Actor(100,4)
     critic = Critic(104)
 
     rewards_history = []
 
-    optimizer_actor = optim.Adam(actor.parameters(), lr=0.01)
     optimizer_critic = optim.Adam(critic.parameters(), lr=0.01)
     for epoch in range(1000):
         env.reset()
@@ -56,7 +41,7 @@ def train(render=False):
         total_reward = 0
         done = False
 
-        while not done:
+        for move in range(300):
             if render:
                 env.render()
                 #input()  # Add delay to make visualization readable
@@ -70,15 +55,7 @@ def train(render=False):
             next_state, reward, done = env.step(action)
 
             
-            # actor_loss = - ((actor_output[action].log() * score).sum())
-
-            # optimizer_actor.zero_grad()
-            # actor_loss.backward()
-            # optimizer_actor.step()
-
-            
-
-            #next_actor_output = actor(encodestate(next_state, env.size)).detach()
+           
             next_action = action_by_best_score(0, env, critic, next_state)
             score = critic(critic_input(state, action, env.size))
             score_next_step = critic(critic_input(next_state, next_action, env.size)).detach()
@@ -90,12 +67,13 @@ def train(render=False):
             critic_loss.backward()
             optimizer_critic.step()
             
-            #print(f"Actor loss: , {actor_loss}, Critic loss: {critic_loss}")
-            
             state = next_state
             action = next_action
             total_reward += reward
-            epsilon = max(epsilon_decay * epsilon, min_epsilon)
+
+            if done:
+                break
+            
             
         if render:
             env.render()  # Show final state
@@ -103,11 +81,13 @@ def train(render=False):
             time.sleep(1)
             
         rewards_history.append(total_reward)
+
+        epsilon = max(epsilon_decay * epsilon, min_epsilon)
         
         if (epoch + 1) % 10 == 0:
             avg_reward = np.mean(rewards_history[-10:])
             print(f"Episode {epoch + 1}, Average Reward: {avg_reward:.2f}, Epsilon: {epsilon:.3f}")
-            
+        
         
 
     input()
